@@ -89,6 +89,7 @@ runBenchmark(connection, benchmarkCount, sqlCommands.insert, function () {
 	console.log('start select');
 	runBenchmark(connection, benchmarkCount, sqlCommands.select, function () {
 		console.log('done!');
+		process.exit(0);
 	});
 
 });
