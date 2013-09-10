@@ -1,7 +1,9 @@
 ﻿"use strict";
 
-var mysql = require('mysql'),
-	benchmarkModules = require('./benchmarkModules');
+var util = require('util'),
+	mysql = require('mysql');
+
+var benchmarkCount = 10000;
 
 var dbConfig = {
     host : 'localhost',
@@ -20,14 +22,18 @@ var sqlCommands = {
         + ') ENGINE=InnoDB DEFAULT CHARSET=utf8',
     dropTable : 'DROP TABLE IF EXISTS name',
 
-    insert : 'INSERT INTO name (id, name) VALUES (?, ?)',
-    select : 'SELECT * FROM name WHERE id = ?'
-
-};
-
-var config = {
-    spawnCount : 100,
-    sqlCommands : sqlCommands
+    insert : {
+		sql : 'INSERT INTO name (id, name) VALUES (?, ?)',
+		parameter : function (i) {
+			return [ i, 'name' + i ];
+		}
+	},
+    select : {
+		sql : 'SELECT * FROM name WHERE id = ?',
+		parameter : function (i) {
+			return [ i ];
+		}
+	}
 };
 
 
@@ -35,15 +41,15 @@ var connection = mysql.createConnection(dbConfig);
 
 connection.connect();
 
-var runBenchmark = function (connection, config, benchModule, callback) {
+var runBenchmark = function (connection, benchmarkCount, sqlCommand, callback) {
 
     var setup = function (cb) {
-        connection.query(config.sqlCommands.dropTable, function (err) {
+        connection.query(sqlCommands.dropTable, function (err) {
             if (err) {
                 console.log('on drop table:' + err);
                 process.exit(1);
             }
-            connection.query(config.sqlCommands.createTable, function (err) {
+            connection.query(sqlCommands.createTable, function (err) {
 				if (err) {
 					console.log('on create table:' + err);
 					process.exit(1);
@@ -53,15 +59,37 @@ var runBenchmark = function (connection, config, benchModule, callback) {
         });
     };
 
-    var runLoop = function (i) {
+    var runLoop = function (i, cb) {
+		if (i < benchmarkCount) {
+			connection.query(sqlCommand.sql, sqlCommand.parameter(i), function (err, r) {
+				if (err) {
+					console.log('on benchmark loop:' + err);
+					process.exit(1);
+				}
+				runLoop(i + 1, cb);
+			})
+		} else {
+			//end
+			cb();
+		}
     };
 
     setup(function () {
-        runLoop(config.spawnCount);
+		var startTime = new Date();
+        runLoop(0, function () {
+			var endTime = new Date();
+			console.log(util.format('Duration: %d ms', endTime - startTime));
+			callback();
+		});
 	});
 };
 
-runBenchmark(connection, config, benchmarkModules.mysql, function (reports) {
-    console.log(reports);
+console.log('start insert');
+runBenchmark(connection, benchmarkCount, sqlCommands.insert, function () {
+	console.log('start select');
+	runBenchmark(connection, benchmarkCount, sqlCommands.select, function () {
+		console.log('done!');
+	});
+
 });
 
