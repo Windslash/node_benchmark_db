@@ -41,24 +41,24 @@ var connection = mysql.createConnection(dbConfig);
 
 connection.connect();
 
+var setup = function (cb) {
+	connection.query(sqlCommands.dropTable, function (err) {
+		if (err) {
+			console.log('on drop table:' + err);
+			process.exit(1);
+		}
+		connection.query(sqlCommands.createTable, function (err) {
+			if (err) {
+				console.log('on create table:' + err);
+				process.exit(1);
+			}
+			cb();
+		});
+	});
+};
+
+
 var runBenchmark = function (connection, benchmarkCount, sqlCommand, callback) {
-
-    var setup = function (cb) {
-        connection.query(sqlCommands.dropTable, function (err) {
-            if (err) {
-                console.log('on drop table:' + err);
-                process.exit(1);
-            }
-            connection.query(sqlCommands.createTable, function (err) {
-				if (err) {
-					console.log('on create table:' + err);
-					process.exit(1);
-				}
-				cb();
-            });
-        });
-    };
-
     var runLoop = function (i, cb) {
 		if (i < benchmarkCount) {
 			connection.query(sqlCommand.sql, sqlCommand.parameter(i), function (err, r) {
@@ -74,23 +74,23 @@ var runBenchmark = function (connection, benchmarkCount, sqlCommand, callback) {
 		}
     };
 
-    setup(function () {
-		var startTime = new Date();
-        runLoop(0, function () {
-			var endTime = new Date();
-			console.log(util.format('Duration: %d ms', endTime - startTime));
-			callback();
-		});
+	var startTime = new Date();
+	runLoop(0, function () {
+		var endTime = new Date();
+		console.log(util.format('Duration: %d ms', endTime - startTime));
+		callback();
 	});
 };
 
-console.log('start insert');
-runBenchmark(connection, benchmarkCount, sqlCommands.insert, function () {
-	console.log('start select');
-	runBenchmark(connection, benchmarkCount, sqlCommands.select, function () {
-		console.log('done!');
-		process.exit(0);
-	});
+setup(function () {
+	console.log('start insert');
+	runBenchmark(connection, benchmarkCount, sqlCommands.insert, function () {
+		console.log('start select');
+		runBenchmark(connection, benchmarkCount, sqlCommands.select, function () {
+			console.log('done!');
+			process.exit(0);
+		});
 
+	});
 });
 
